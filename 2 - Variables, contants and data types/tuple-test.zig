@@ -23,14 +23,20 @@ pub fn main() !void {
 
     // Here you define a Tagged union to define all types of pets and deifine its race.
     // This kind of union is called tagged union and allows to define method to get the type.
-    const Pet = union(enum) {
+    const Race = enum {
+        dog,
+        cat,
+    };
+
+    const Pet = union(Race) {
         dog: []const u8,
         cat: []const u8,
 
-        fn get(self: @This()) []const u8 {
+        // Rather than return the pet race, we could just print the whole information if the method also gets the name.
+        fn get(self: @This(), name: []const u8) !void {
             return switch (self) {
-                .dog => |d| d,
-                .cat => |c| c,
+                .dog => |d| std.debug.print("My dog name is {s} and it is a {s}\n", .{ name, d }),
+                .cat => |c| std.debug.print("My cat name is {s} and it is a {s}\n", .{ name, c }),
             };
         }
     };
@@ -43,6 +49,5 @@ pub fn main() !void {
 
     // Tagged unions allows us to using the same method return different values, in this case
     // all of them are []const u8 but we could return other types just playing with the definition.
-
-    std.debug.print("My pet name is {s} and it is a {s}\n", .{ MyPet[0], MyPet[1].get() });
+    _ = try MyPet[1].get(MyPet[0]);
 }
