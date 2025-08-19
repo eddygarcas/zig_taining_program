@@ -1,53 +1,62 @@
 const std = @import("std");
 
 pub fn main() !void {
+    // Tuples in Zig are anonymous structs with numbered fields
     const myTuple = .{
         42,
-        "Hello",
+        "Hello", 
         3.14,
     };
 
     const intValue: i32 = myTuple[0];
-    // In Zig string are a []const u8
+    // In Zig strings are arrays of bytes (u8)
     const stringValue: []const u8 = myTuple[1];
     const floatValue: f32 = myTuple[2];
 
     std.debug.print("intValue: {d}\n", .{intValue});
     std.debug.print("stringValue: {s}\n", .{stringValue});
-    // for floats you can use the format decimal and precision
+    // Format floats with decimal precision using {d:.2}
     std.debug.print("floatValue: {d:.2}\n", .{floatValue});
 
-    // You can print the whole tuple directly but it will access it in order, so make sure
-    // the format matches the order in the tuple.
+    // Print entire tuple with matched format specifiers
     std.debug.print("My tuple decimal {d} string {s} and float {d:.2}\n", myTuple);
 
-    // Here you define a Tagged union to define all types of pets and deifine its race.
-    // This kind of union is called tagged union and allows to define method to get the type.
+    // enum: A type that can only have one of a fixed set of values
+    // Here Race can only be either dog or cat
     const Race = enum {
         dog,
         cat,
     };
 
+    // Tagged union: Combines an enum with data for each variant
+    // Each variant can hold different types of data
+    // Here Pet uses Race as its tag and holds string data for each variant
     const Pet = union(Race) {
         dog: []const u8,
         cat: []const u8,
 
-        // Rather than return the pet race, we could just print the whole information if the method also gets the name.
-        fn get(self: @This(), name: []const u8) !void {
+        fn get(self: @This()) !void {
             return switch (self) {
-                .dog => |d| std.debug.print("My dog name is {s} and it is a {s}\n", .{ name, d }),
-                .cat => |c| std.debug.print("My cat name is {s} and it is a {s}\n", .{ name, c }),
+                .dog => |d| std.debug.print("is a dog and it is a {s}\n", .{d}),
+                .cat => |c| std.debug.print("is a cat and it is a {s}\n", .{c}),
             };
         }
     };
 
-    // Here we define a tuple to name our pet as well as define a Pet tagged union saying that a Border Collie dog
-    const MyPet = .{
-        "Joy",
-        Pet{ .dog = "Border Collie" },
+    // struct: A composite type that groups together named fields
+    // Here MyPet combines a name string with a Pet tagged union
+    // Also defines values by default.
+    const MyPet = struct {
+        name: []const u8 = "Joy",
+        race: Pet = Pet{ .dog = "Border Collie" },
     };
 
-    // Tagged unions allows us to using the same method return different values, in this case
-    // all of them are []const u8 but we could return other types just playing with the definition.
-    _ = try MyPet[1].get(MyPet[0]);
+    const myPet = MyPet{};
+
+    std.debug.print("My pet name is {s} and ", .{myPet.name});
+    // Using catch to handle potential errors from get():
+    // 1. _ = discards the success value since get() returns void
+    // 2. catch captures any error in err variable
+    // 3. If error occurs, prints it using debug.print
+    _ = myPet.race.get() catch |err| std.debug.print("error: {s}\n", .{err});
 }
