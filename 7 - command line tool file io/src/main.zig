@@ -1,5 +1,12 @@
 //! File I/O example demonstrating file operations and directory traversal
 //! This module provides functionality to read configuration files and list directory contents
+//! Key features:
+//! - File reading/writing with buffered I/O
+//! - Directory traversal and file listing
+//! - Line-by-line file processing
+//! - File appending operations
+//! - Error handling for common file operations
+
 const std = @import("std");
 
 /// Main entry point that demonstrates file operations
@@ -14,25 +21,43 @@ pub fn main() !void {
     const file = try std.fs.cwd().openFile("config.txt", flags);
     defer file.close();
 
-    // List all files in current directory
+    // List all files in current directory with their types
     var iter = (try std.fs.cwd().openDir(".", .{ .iterate = true })).iterate();
     while (try iter.next()) |entry| {
         try std.io.getStdOut().writer().print("{s} -> {s}\n", .{ @tagName(entry.kind), entry.name });
     }
 
-    // Read entire file content
+    // Read entire file content into memory with size limit
     const content = try file.readToEndAlloc(alloc, 1024 * 10);
     defer alloc.free(content);
     try std.io.getStdOut().writer().print("{s}\n", .{content});
 
     // Process files line by line
-    try readLines("config.txt");
     try readLines("configs.txt");
+
+    // Append new text to existing file
+    try appendToFile("config.txt", "\nAppend text to a file\n");
+    try readLines("config.txt");
+}
+
+/// Appends text to the end of a file
+/// Opens file in read/write mode, seeks to end, and writes new content
+/// Parameters:
+///   path: File path to append to
+///   text: Text content to append
+/// Returns: Error if file operations fail
+fn appendToFile(path: []const u8, text: []const u8) !void {
+    const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
+    defer file.close();
+    const end = try file.getEndPos();
+    try file.seekTo(end);
+    try file.writer().writeAll(text);
 }
 
 /// Reads and processes a file line by line
+/// Uses buffered reader for efficient I/O
 /// Handles file not found errors gracefully
-/// Prints each line after trimming whitespace
+/// Trims whitespace from each line before printing
 /// Parameters:
 ///   path: File path to read
 /// Returns: Error if file operations fail
