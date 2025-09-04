@@ -6,3 +6,5 @@
 /5 - command line/.zig-cache/
 /6 - command line tool statistics/.zig-cache/
 /6 - command line tool statistics/zig-out/
+/7 - command line tool file io/.zig-cache/
+/7 - command line tool file io/zig-out/
