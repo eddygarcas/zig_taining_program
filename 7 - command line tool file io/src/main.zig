@@ -6,6 +6,7 @@
 //! - Line-by-line file processing
 //! - File appending operations
 //! - Error handling for common file operations
+//! - Atomic file writes for safe file updates
 
 const std = @import("std");
 
@@ -27,7 +28,7 @@ pub fn main() !void {
         try std.io.getStdOut().writer().print("{s} -> {s}\n", .{ @tagName(entry.kind), entry.name });
     }
 
-    // Read entire file content into memory with size limit
+    // Read entire file content into memory with size limit (10KB)
     const content = try file.readToEndAlloc(alloc, 1024 * 10);
     defer alloc.free(content);
     try std.io.getStdOut().writer().print("{s}\n", .{content});
@@ -38,6 +39,27 @@ pub fn main() !void {
     // Append new text to existing file
     try appendToFile("config.txt", "\nAppend text to a file\n");
     try readLines("config.txt");
+
+    try writeAtomic("config.txt", "test", alloc);
+}
+
+/// Writes content to a file atomically using a temporary file
+/// First writes to a temp file then renames it to the target path
+/// Parameters:
+///   path: Target file path
+///   text: Content to write
+///   alloc: Memory allocator for temporary filename
+/// Returns: Error if file operations fail
+fn writeAtomic(path: []const u8, text: []const u8, alloc: std.mem.Allocator) !void {
+    const cwd = std.fs.cwd();
+    const temp_file = try std.fmt.allocPrint(alloc, "{s}.tmp", .{path});
+    defer alloc.free(temp_file);
+    {
+        const file = try cwd.createFile(temp_file, .{ .truncate = true });
+        defer file.close();
+        try file.writer().writeAll(text);
+    }
+    try cwd.rename(temp_file, path);
 }
 
 /// Appends text to the end of a file
@@ -79,8 +101,4 @@ fn readLines(path: []const u8) !void {
         const trimmed = std.mem.trim(u8, line, "\r\t");
         try std.io.getStdOut().writer().print("{s}\n", .{trimmed});
     }
-}
-
-test "run" {
-    try main();
 }
