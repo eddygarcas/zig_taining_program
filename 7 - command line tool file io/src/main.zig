@@ -51,13 +51,19 @@ pub fn main() !void {
         std.debug.print("Bad environment {s}\n", .{@errorName(err)});
     };
 
+    // Read INI file content into memory using temporary allocation
     const content_ini = try readContentFromFile("start.ini", alloc);
+    defer alloc.free(content_ini); // Memory cleanup pattern in Zig
+
+    // Parse content into hashmap using std.StringHashMap - Zig's built-in hash table
     const map: std.StringHashMap([]const u8) = try parseIni(content_ini, alloc);
-    const iterHash = map.valueIterator();
-    while (try iterHash.next()) |elem| {
-        std.debug.print("value {s}", .{ elem });
+
+    // Iterate through hashmap using iterator() - Zig's safe iteration pattern
+    var iterHash = map.iterator();
+    while (iterHash.next()) |elem| {
+        // Access pointers using .* operator - explicit pointer dereferencing in Zig
+        std.debug.print("map[{s}] = {s}\n", .{ elem.key_ptr.*, elem.value_ptr.* });
     }
-    std.debug.print("Hash map {}", .{map});
 }
 
 /// Parses INI file content into std.StringHashMap
@@ -65,8 +71,6 @@ pub fn main() !void {
 fn parseIni(content: []const u8, alloc: std.mem.Allocator) !std.StringHashMap([]const u8) {
     // Notice that the defer command is here, doing it inside *readContnentFromFile()* will raise a
     // compilation error
-    defer alloc.free(content);
-    std.debug.print("INI content: {s}", .{content});
     var map = std.StringHashMap([]const u8).init(alloc);
     var lines = std.mem.tokenizeAny(u8, content, "\n");
     while (lines.next()) |raw_line| {
@@ -76,7 +80,15 @@ fn parseIni(content: []const u8, alloc: std.mem.Allocator) !std.StringHashMap([]
         const eq = std.mem.indexOfScalar(u8, line, '=') orelse return error.InvalidFormat;
         const key = std.mem.trim(u8, line[0..eq], "\t");
         const value = std.mem.trim(u8, line[eq + 1 ..], "\t");
+
+        // Important! if you want to actually store key/value in the map you have to copy them into a new
+        // memory allocation other wise when defer alloc.free(content) they will be lost.
+        //try map.put(try alloc.dupe(u8, key), try alloc.dupe(u8, value));
+
+        // If you choose to use the content of *content* parameter then the defer alloc.free(contect) has to
+        // be place before this call.
         try map.put(key, value);
+        std.debug.print("key {s} = {s}\n", .{ key, value });
     }
     return map;
 }
