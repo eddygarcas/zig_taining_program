@@ -1,55 +1,99 @@
 //! File I/O example demonstrating file operations and directory traversal
 //! This module provides functionality to read configuration files and list directory contents
 //! Key features:
-//! - File reading/writing with buffered I/O
-//! - Directory traversal and file listing
-//! - Line-by-line file processing
-//! - File appending operations
+//! - File reading/writing with buffered I/O using std.fs.File
+//! - Directory traversal with std.fs.Dir.iterate()
+//! - Line-by-line file processing with std.io.bufferedReader
+//! - File appending with std.fs.File.seekTo() and writer()
 //! - Error handling for common file operations
-//! - Atomic file writes for safe file updates
+//! - Atomic file writes using std.fs.Dir.rename()
 
 const std = @import("std");
 
-/// Main entry point that demonstrates file operations
-/// Opens and reads a config file, lists directory contents, and processes file lines
-/// Uses page allocator for memory management
+/// Environment represents different deployment environments
+/// Used with std.meta.stringToEnum for string-to-enum conversion
+const Environment = enum { development, staging, production };
+
+/// Configuration struct with default values
+/// Fields use primitive types from std.builtin
+const Config = struct { port: u16 = 8080, env: Environment = .development, enable_cache: bool = true };
+
+/// Main entry point that demonstrates file operations using std.fs and std.io
+/// Uses std.heap.page_allocator for memory management
 /// Returns error if file operations fail
 pub fn main() !void {
     const alloc = std.heap.page_allocator;
 
-    // Open file with read/write permissions
+    // std.fs.File.OpenFlags controls file access mode
     const flags = std.fs.File.OpenFlags{ .mode = .read_write };
     const file = try std.fs.cwd().openFile("config.txt", flags);
     defer file.close();
 
-    // List all files in current directory with their types
+    // std.fs.Dir.iterate() provides directory iteration
     var iter = (try std.fs.cwd().openDir(".", .{ .iterate = true })).iterate();
     while (try iter.next()) |entry| {
         try std.io.getStdOut().writer().print("{s} -> {s}\n", .{ @tagName(entry.kind), entry.name });
     }
 
-    // Read entire file content into memory with size limit (10KB)
+    // std.fs.File.readToEndAlloc reads entire file into buffer
     const content = try file.readToEndAlloc(alloc, 1024 * 10);
     defer alloc.free(content);
     try std.io.getStdOut().writer().print("{s}\n", .{content});
 
-    // Process files line by line
     try readLines("configs.txt");
-
-    // Append new text to existing file
     try appendToFile("config.txt", "\nAppend text to a file\n");
     try readLines("config.txt");
-
     try writeAtomic("config.txt", "test", alloc);
+
+    const env = try parseEnv("development");
+    std.debug.print("Environment {s}\n", .{@tagName(env)});
+    _ = parseEnv("devel") catch |err| {
+        std.debug.print("Bad environment {s}\n", .{@errorName(err)});
+    };
+
+    const content_ini = try readContentFromFile("start.ini", alloc);
+    const map: std.StringHashMap([]const u8) = try parseIni(content_ini, alloc);
+    const iterHash = map.valueIterator();
+    while (try iterHash.next()) |elem| {
+        std.debug.print("value {s}", .{ elem });
+    }
+    std.debug.print("Hash map {}", .{map});
 }
 
-/// Writes content to a file atomically using a temporary file
-/// First writes to a temp file then renames it to the target path
-/// Parameters:
-///   path: Target file path
-///   text: Content to write
-///   alloc: Memory allocator for temporary filename
-/// Returns: Error if file operations fail
+/// Parses INI file content into std.StringHashMap
+/// Uses std.mem.tokenizeAny for line splitting
+fn parseIni(content: []const u8, alloc: std.mem.Allocator) !std.StringHashMap([]const u8) {
+    // Notice that the defer command is here, doing it inside *readContnentFromFile()* will raise a
+    // compilation error
+    defer alloc.free(content);
+    std.debug.print("INI content: {s}", .{content});
+    var map = std.StringHashMap([]const u8).init(alloc);
+    var lines = std.mem.tokenizeAny(u8, content, "\n");
+    while (lines.next()) |raw_line| {
+        const line = std.mem.trim(u8, raw_line, "\t\r");
+        if (line.len == 0 or line[0] == '#') continue;
+
+        const eq = std.mem.indexOfScalar(u8, line, '=') orelse return error.InvalidFormat;
+        const key = std.mem.trim(u8, line[0..eq], "\t");
+        const value = std.mem.trim(u8, line[eq + 1 ..], "\t");
+        try map.put(key, value);
+    }
+    return map;
+}
+
+/// Converts string to Environment enum using std.meta.stringToEnum
+fn parseEnv(input: []const u8) !Environment {
+    return std.meta.stringToEnum(Environment, input) orelse error.InvalidEnvironment;
+}
+
+/// Reads file content using std.fs.File.readToEndAlloc
+fn readContentFromFile(path: []const u8, alloc: std.mem.Allocator) ![]const u8 {
+    const file = try std.fs.cwd().openFile(path, .{});
+    defer file.close();
+    return try file.readToEndAlloc(alloc, 1024 * 10);
+}
+
+/// Performs atomic file write using std.fs.Dir.rename
 fn writeAtomic(path: []const u8, text: []const u8, alloc: std.mem.Allocator) !void {
     const cwd = std.fs.cwd();
     const temp_file = try std.fmt.allocPrint(alloc, "{s}.tmp", .{path});
@@ -62,27 +106,15 @@ fn writeAtomic(path: []const u8, text: []const u8, alloc: std.mem.Allocator) !vo
     try cwd.rename(temp_file, path);
 }
 
-/// Appends text to the end of a file
-/// Opens file in read/write mode, seeks to end, and writes new content
-/// Parameters:
-///   path: File path to append to
-///   text: Text content to append
-/// Returns: Error if file operations fail
+/// Appends text using std.fs.File.seekTo and writer
 fn appendToFile(path: []const u8, text: []const u8) !void {
     const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
     defer file.close();
-    const end = try file.getEndPos();
-    try file.seekTo(end);
+    try file.seekTo(try file.getEndPos());
     try file.writer().writeAll(text);
 }
 
-/// Reads and processes a file line by line
-/// Uses buffered reader for efficient I/O
-/// Handles file not found errors gracefully
-/// Trims whitespace from each line before printing
-/// Parameters:
-///   path: File path to read
-/// Returns: Error if file operations fail
+/// Reads file line-by-line using std.io.bufferedReader
 fn readLines(path: []const u8) !void {
     const file = std.fs.cwd().openFile(path, .{}) catch |err| {
         if (err == error.FileNotFound) {
