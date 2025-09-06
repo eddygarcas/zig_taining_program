@@ -83,7 +83,8 @@ pub fn main() !void {
     defer json_cfg.close();
     const content_json = try json_cfg.readToEndAlloc(alloc, 1024 * 64);
     defer alloc.free(content_json);
-    _ = try parseJson(content_json, alloc);
+    const cfgIni: Config = try parseJson(content_json, alloc);
+    cfgIni.toLog();
 }
 
 /// Hydrates a Config struct with values from a string hash map
@@ -105,14 +106,44 @@ fn hydrate(cfg: *Config, map: std.StringHashMap([]const u8)) !void {
     }
 }
 
+/// Parses JSON content into a Config struct
+/// Uses std.json.Parsed and std.json.Value to parse JSON into a struct
+/// Returns Config struct with parsed values
+/// @param content: JSON content to parse
+/// @param alloc: Memory allocator for dynamic allocations
+/// @return Config struct with parsed values or error
 fn parseJson(content: []const u8, alloc: std.mem.Allocator) !Config {
+    // Parse JSON content into a Parsed struct using std.json.parseFromSlice
+    // The Parsed struct is an intermediate representation of JSON data
     var tree: std.json.Parsed(std.json.Value) = try std.json.parseFromSlice(std.json.Value, alloc, content, .{});
     defer tree.deinit();
+
+    // Create an empty Config struct
     var cfg = Config{};
+
+    // Extract the JSON object from Parsed struct
     const obj = tree.value.object;
+
+    // Parse port value from JSON object
     if (obj.get("port")) |val| {
-        cfg.port = std.fmt.parseInt(u16, val.integer, 10);
+        // Convert JSON integer to u16 integer
+        cfg.port = @intCast(val.integer);
     }
+
+    // Parse environment value from JSON object
+    if (obj.get("environment")) |val| {
+        // Convert JSON string to Environment enum
+        cfg.env = try parseEnv(val.string);
+    }
+
+    // Parse enable_cache value from JSON object
+    if (obj.get("enable_cache")) |val| {
+        // Convert JSON boolean to bool
+        cfg.enable_cache = val.bool;
+    }
+
+    // Return the parsed Config struct
+    return cfg;
 }
 
 /// Parses INI file content into std.StringHashMap
