@@ -16,7 +16,15 @@ const Environment = enum { development, staging, production };
 
 /// Configuration struct with default values
 /// Fields use primitive types from std.builtin
-const Config = struct { port: u16 = 8080, env: Environment = .development, enable_cache: bool = true };
+const Config = struct {
+    port: u16 = 8080,
+    env: Environment = .development,
+    enable_cache: bool = true,
+
+    fn toLog(this: Config) void {
+        std.debug.print("Port {d} | env {s} | cache {}", .{ this.port, @tagName(this.env), this.enable_cache });
+    }
+};
 
 /// Main entry point that demonstrates file operations using std.fs and std.io
 /// Uses std.heap.page_allocator for memory management
@@ -63,6 +71,47 @@ pub fn main() !void {
     while (iterHash.next()) |elem| {
         // Access pointers using .* operator - explicit pointer dereferencing in Zig
         std.debug.print("map[{s}] = {s}\n", .{ elem.key_ptr.*, elem.value_ptr.* });
+    }
+
+    var cfg: Config = Config{};
+    hydrate(&cfg, map) catch |err| {
+        std.debug.print("Error hydrate map {}", .{err});
+    };
+    cfg.toLog();
+
+    const json_cfg = try std.fs.cwd().openFile("start.json", .{});
+    defer json_cfg.close();
+    const content_json = try json_cfg.readToEndAlloc(alloc, 1024 * 64);
+    defer alloc.free(content_json);
+    _ = try parseJson(content_json, alloc);
+}
+
+/// Hydrates a Config struct with values from a string hash map
+/// Takes a pointer to Config and a StringHashMap of string values
+/// Performs type conversion for each field:
+/// - port: string to u16 integer
+/// - environment: string to Environment enum
+/// - enable_cache: string comparison to bool
+/// Returns error if parsing fails
+fn hydrate(cfg: *Config, map: std.StringHashMap([]const u8)) !void {
+    if (map.get("port")) |val| {
+        cfg.port = try std.fmt.parseInt(u16, val, 10);
+    }
+    if (map.get("environment")) |val| {
+        cfg.env = try parseEnv(val);
+    }
+    if (map.get("enable_cache")) |val| {
+        cfg.enable_cache = std.mem.eql(u8, val, "true");
+    }
+}
+
+fn parseJson(content: []const u8, alloc: std.mem.Allocator) !Config {
+    var tree: std.json.Parsed(std.json.Value) = try std.json.parseFromSlice(std.json.Value, alloc, content, .{});
+    defer tree.deinit();
+    var cfg = Config{};
+    const obj = tree.value.object;
+    if (obj.get("port")) |val| {
+        cfg.port = std.fmt.parseInt(u16, val.integer, 10);
     }
 }
 
