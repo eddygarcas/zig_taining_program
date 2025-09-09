@@ -60,7 +60,18 @@ pub fn main() !void {
     };
 
     // Read INI file content into memory using temporary allocation
-    const content_ini = try readContentFromFile("start.ini", alloc);
+    const content_ini = readContentFromFile("staret.ini", alloc) catch |err| blk: {
+        switch (err) {
+            error.ConfigMissing => {
+                try std.io.getStdErr().writer().print("Config file not found; using defaults.\n", .{});
+                break :blk "";
+            },
+            else => |e|{
+                try std.io.getStdErr().writer().print("Fatal: {}\n", .{e});
+                break :blk "";
+            }
+        }
+    };
     defer alloc.free(content_ini); // Memory cleanup pattern in Zig
 
     // Parse content into hashmap using std.StringHashMap - Zig's built-in hash table
@@ -180,7 +191,12 @@ fn parseEnv(input: []const u8) !Environment {
 
 /// Reads file content using std.fs.File.readToEndAlloc
 fn readContentFromFile(path: []const u8, alloc: std.mem.Allocator) ![]const u8 {
-    const file = try std.fs.cwd().openFile(path, .{});
+    const file = std.fs.cwd().openFile(path, .{}) catch |err| {
+        switch (err) {
+            error.FileNotFound => return error.ConfigMissing,
+            else => return err,
+        }
+    };
     defer file.close();
     return try file.readToEndAlloc(alloc, 1024 * 10);
 }
