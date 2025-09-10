@@ -8,3 +8,7 @@
 /6 - command line tool statistics/zig-out/
 /7 - command line tool file io/.zig-cache/
 /7 - command line tool file io/zig-out/
+/8 - Build config file parser cli tool/.zig-cache/
+/8 - Build config file parser cli tool/zig-out/bin/
+/8 - Build config file parser cli tool/zig-out/lib/
+/8 - Build config file parser cli tool/zig-out/tests/
