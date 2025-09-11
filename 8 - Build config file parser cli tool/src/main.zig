@@ -3,6 +3,7 @@
 //! is to delete this file and start with root.zig instead.
 const std = @import("std");
 const DynString = @import("strings/dynstring.zig").DynString;
+const log = std.log;
 const assert = std.debug.assert;
 
 const Environment = enum { development, staging, production };
@@ -28,11 +29,17 @@ pub fn main() !void {
         return;
     };
 
-    var cfg_ptr: Config = try loadConfig(alloc);
-
+    // orelse makes sense here are loadConfig() can return null ?!Config
+    const start = std.time.nanoTimestamp();
+    log.info("Loading config...\n", .{});
+    var cfg_ptr: Config = try loadConfig(alloc) orelse Config{};
+    const elapsed = std.time.nanoTimestamp() - start;
+    std.debug.print("Loaded config in {} ns\n", .{elapsed});
+    //@breakpoint();
     switch (cmd.mode) {
         .show => std.debug.print("{any}\n", .{cfg_ptr}),
         .reset => std.fs.cwd().deleteFile(CONFIG_INI) catch |e| {
+            log.err("Error deleting config file: {}\n", .{e});
             if (e != error.FileNotFound) return e;
         },
         .set => {
@@ -52,7 +59,7 @@ pub fn main() !void {
 
 test "load start.ini file configuration" {
     const alloc = std.heap.page_allocator;
-    const cfg_ptr: Config = try loadConfig(alloc);
+    const cfg_ptr: Config = try loadConfig(alloc) orelse Config{};
     std.debug.print("{any}\n", .{cfg_ptr});
     // expect(cond) passes if cond is true.
     // expectEqual(a, b) compares values with helpful diff output.
@@ -164,7 +171,7 @@ pub fn saveConfig(cfg: Config, alloc: std.mem.Allocator) !void {
 /// Returns:
 /// - `Config`: The `Config` struct representing the contents of the file.
 /// - `error`: If any of the underlying functions fail, this function will return the corresponding error.
-fn loadConfig(alloc: std.mem.Allocator) !Config {
+fn loadConfig(alloc: std.mem.Allocator) !?Config {
     // Open the file
     const file = std.fs.cwd().openFile(CONFIG_INI, .{}) catch |e| {
         if (e == error.FileNotFound) {
