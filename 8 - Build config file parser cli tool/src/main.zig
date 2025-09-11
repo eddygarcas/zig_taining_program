@@ -54,6 +54,9 @@ test "load start.ini file configuration" {
     const alloc = std.heap.page_allocator;
     const cfg_ptr: Config = try loadConfig(alloc);
     std.debug.print("{any}\n", .{cfg_ptr});
+    // expect(cond) passes if cond is true.
+    // expectEqual(a, b) compares values with helpful diff output.
+    // expectError(tag, fn()) verifies a function returns a specific error.
     try std.testing.expect(cfg_ptr.port > 8080);
 }
 
