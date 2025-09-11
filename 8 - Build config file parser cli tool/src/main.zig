@@ -3,6 +3,7 @@
 //! is to delete this file and start with root.zig instead.
 const std = @import("std");
 const DynString = @import("strings/dynstring.zig").DynString;
+const assert = std.debug.assert;
 
 const Environment = enum { development, staging, production };
 const Mode = enum { show, set, reset };
@@ -47,7 +48,13 @@ pub fn main() !void {
             try saveConfig(cfg_ptr, alloc);
         },
     }
+}
 
+test "load start.ini file configuration" {
+    const alloc = std.heap.page_allocator;
+    const cfg_ptr: Config = try loadConfig(alloc);
+    std.debug.print("{any}\n", .{cfg_ptr});
+    try std.testing.expect(cfg_ptr.port > 8080);
 }
 
 /// Parses command line arguments and returns a struct with the parsed command, key, and value.
@@ -68,6 +75,12 @@ pub fn main() !void {
 /// - `error.NoKeyOrValue`: If the `--set` command is specified but there are not enough arguments.
 /// - `error.InvalidFormat`: If the `--set` command is specified but the key and value are not separated by an equals sign.
 fn parseCmd(args: [][:0]u8) !struct { mode: Mode, key: []const u8 = "", val: []const u8 = "" } {
+    // You can also include Tiger style coding inside your functions.
+    // This will panic if args.len is 0.
+    // At compile time you can also use if (size == 0) @compileError("buffer size must be > 0");
+    // This will raise a compile error if args.len is 0 but only works at compile time.
+    assert(args.len > 0);
+    std.testing.expect(args.len > 0) catch return error.NoCommand;
     if (args.len < 2) return error.NoCommand;
     if (std.mem.eql(u8, args[1], "--show")) return .{ .mode = .show };
     if (std.mem.eql(u8, args[1], "--reset")) return .{ .mode = .reset };
@@ -210,7 +223,7 @@ fn hydrate(cfg: *Config, map: std.StringHashMap([]const u8)) !void {
     if (map.get("port")) |val| {
         cfg.*.port = try std.fmt.parseInt(u16, val, 10);
     }
-    if (map.get("environment")) |val| {
+    if (map.get("env")) |val| {
         cfg.*.env = try parseEnv(val);
     }
     if (map.get("enable_cache")) |val| {
