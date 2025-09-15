@@ -1,46 +1,56 @@
-//! By convention, main.zig is where your main function lives in the case that
-//! you are building an executable. If you are making a library, the convention
-//! is to delete this file and start with root.zig instead.
-
-pub fn main() !void {
-    // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
-
-    // stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
-
-    try stdout.print("Run `zig build test` to run the tests.\n", .{});
-
-    try bw.flush(); // Don't forget to flush!
-}
-
-test "simple test" {
-    var list = std.ArrayList(i32).init(std.testing.allocator);
-    defer list.deinit(); // Try commenting this out and see if zig detects the memory leak!
-    try list.append(42);
-    try std.testing.expectEqual(@as(i32, 42), list.pop());
-}
-
-test "use other module" {
-    try std.testing.expectEqual(@as(i32, 150), lib.add(100, 50));
-}
-
-test "fuzz example" {
-    const Context = struct {
-        fn testOne(context: @This(), input: []const u8) anyerror!void {
-            _ = context;
-            // Try passing `--fuzz` to `zig build test` and see if it manages to fail this test case!
-            try std.testing.expect(!std.mem.eql(u8, "canyoufindme", input));
-        }
-    };
-    try std.testing.fuzz(Context{}, Context.testOne, .{});
-}
-
+//! This is the main entry point for the CLI application.
+//!
+//! It parses the command line arguments and uses them to configure the formatter.
+//! The formatter is then used to format the text provided on the command line. The
+//! formatted text is then written to standard output.
 const std = @import("std");
+const fmt = @import("formatter.zig");
 
-/// This imports the separate module containing `root.zig`. Take a look in `build.zig` for details.
-const lib = @import("_9___CLI_formats_input_string_lib");
+/// The main entry point for the CLI application.
+///
+/// It parses the command line arguments and uses them to configure the formatter.
+/// The formatter is then used to format the text provided on the command line. The
+/// formatted text is then written to standard output.
+pub fn main() !void {
+    const gpa = std.heap.page_allocator;
+    const args = try std.process.argsAlloc(gpa);
+    defer std.process.argsFree(gpa, args);
+
+    // Initialize the formatter options to default values.
+    var opts = fmt.Options{};
+    // Initialize a variable to hold the text to format.
+    var text: ?[]const u8 = null;
+    // Loop through the command line arguments.
+    var i:usize = 1;
+    while (i < args.len) : (i += 1) {
+        const arg = args[i];
+        // If the argument is a width option, parse the width value and store it in the options.
+        if (std.mem.startsWith(u8, arg, "--width=")) {
+            opts.width = try std.fmt.parseInt(u8, arg["--width=".len..], 10);
+        }
+        // If the argument is an alignment option, parse the alignment value and store it in the options.
+        else if (std.mem.startsWith(u8, arg, "--align=")) {
+            opts.aligned = std.meta.stringToEnum(fmt.Align, arg["--align=".len..]) orelse return error.InvalidAlign;
+        }
+        // If the argument is a casing option, parse the casing value and store it in the options.
+        else if (std.mem.startsWith(u8, arg, "--case=")){
+            opts.casing = std.meta.stringToEnum(fmt.Casing, arg["--case=".len..]) orelse return error.InvalidCasing;
+        }
+        // If the argument starts with a '-' character and is not a valid option, return an error.
+        else if (arg[0] == '-') {
+            return error.UnknownFlag;
+        }
+        // If the argument is not a valid option, store it in the text variable.
+        else {
+            text = arg;
+        }
+    }
+    // If no text was provided on the command line, return an error.
+    if (text == null) return error.NoText;
+
+    // Use the formatter to format the text and store the result in the out variable.
+    const out = try fmt.format(text.?, opts, gpa);
+    defer gpa.free(out);
+    // Write the formatted text to standard output.
+    try std.io.getStdOut().writeAll(out);
+}
