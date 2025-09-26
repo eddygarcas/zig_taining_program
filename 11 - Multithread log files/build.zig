@@ -113,4 +113,10 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_unit_tests.step);
     test_step.dependOn(&run_exe_unit_tests.step);
+
+    const test_artifact = b.addInstallArtifact(exe_unit_tests,
+        .{.dest_dir = .{.override = .{.custom = "tests"}}},
+    );
+    const install_test_step = b.step("install_test", "Create test binaries for debugging");
+    install_test_step.dependOn(&test_artifact.step);
 }
