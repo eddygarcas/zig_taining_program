@@ -14,3 +14,6 @@
 /8 - Build config file parser cli tool/zig-out/tests/
 /9 - CLI formats input string/.zig-cache/
 /9 - CLI formats input string/zig-out/
+/11 - Multithread log files/.zig-cache/
+/11 - Multithread log files/zig-out/
+/10 - multi-threading/.zig-cache/
