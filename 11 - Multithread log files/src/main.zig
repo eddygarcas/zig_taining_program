@@ -1,6 +1,7 @@
 //! This Zig program demonstrates how to implement a thread-safe queue of messages.
 //! The queue is used to handle log messages and is accessed by multiple threads.
 const std = @import("std");
+const builtin = @import("builtin");
 
 /// Define a buffer capacity for the queue.
 const CAPCITY = 1024;
@@ -113,14 +114,19 @@ pub fn main() !void {
 /// - `q`: A pointer to the queue.
 /// - `done`: A pointer to a boolean variable that indicates whether the thread should stop.
 /// - `file`: A pointer to the file where the messages will be written.
-fn loggerThread(q: *Queue, done: *bool, file: *std.fs.File) void {
+fn loggerThread(q: *Queue, done: *bool, file: *std.fs.File) !void {
     while (true) {
         // Pop a message from the queue.
         if (q.pop()) |msg| {
             // Write the message to the file.
-            file.writer().print("[{d} (T{d}) {s}\n", .{ msg.timestamp, msg.thread_id, msg.text }) catch {};
+            var buf: [64]u8 = undefined;
+            var buf_writer = file.writer(&buf);
+            const buf_stdout = &buf_writer.interface;
+
+            try buf_stdout.print("[{d} (T{d}) {s}\n", .{ msg.timestamp, msg.thread_id, msg.text });
             // If the queue is empty and the done flag is set, stop the thread.
-        } else if (done.*) break else std.time.sleep(100_000);
+            try buf_stdout.flush();
+        } else if (done.*) break else std.Thread.sleep(100_000);
         // If the queue is empty and the done flag is not set, wait for 100 microseconds.
     }
 }
@@ -139,6 +145,6 @@ fn worker(id: u32, q: *Queue) void {
             .text = undefined, // Initialize the text field.
         };
         _ = std.fmt.bufPrint(&msg.text, "Message {d}", .{i}) catch continue; // Format the text.
-        while (!q.push(msg)) std.time.sleep(50_000); // Add the message to the queue.
+        while (!q.push(msg)) std.Thread.sleep(50_000); // Add the message to the queue.
     }
 }
