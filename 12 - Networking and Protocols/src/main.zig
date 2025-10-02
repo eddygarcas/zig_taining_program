@@ -4,8 +4,10 @@ const std = @import("std");
 /// This function is the main entry point of the program. It calls the `server` function and then calls the `client` function. If an error occurs during the execution of the `client` function, it is caught and printed to the standard error.
 pub fn main() !void {
     // Prints to stderr, ignoring potential errors.
-    try server();
-    client() catch |err| std.debug.print("{}\n", .{err});
+    var ser = try std.Thread.spawn(.{}, server, .{});
+    var cli = try std.Thread.spawn(.{}, client, .{});
+    ser.join();
+    cli.join();
 }
 
 /// The client function.
@@ -21,7 +23,7 @@ pub fn client() !void {
     // Send a message to the server.
     try s.writeAll("Hello, World!\n");
     // Read a message from the server.
-    var buff: [6]u8 = undefined;
+    var buff: [68]u8 = undefined;
     const n = try s.read(&buff);
     // Print the received message.
     std.debug.print("{s}\n", .{buff[0..n]});
@@ -36,14 +38,18 @@ pub fn server() !void {
     // Create a TCP listener on the specified address and port.
     var serv = try std.net.Address.listen(addr, .{});
     defer serv.deinit();
-
+    //_ = try std.Io.getStdOut().writer().print("Server started on {s}:{d}\n", .{ addr.ip, addr.port });
+    std.debug.print("Server started on\n", .{});
     // Accept a connection from a client.
     var conn = try serv.accept();
     defer conn.stream.close();
 
     // Read a message from the client.
     var buff: [128]u8 = undefined;
-    const n = try conn.stream.read(&buff);
+    const n = conn.stream.read(&buff) catch |err| switch (err) {
+        error.WouldBlock => 0,
+        else => return err,
+    };
     // Write the received message back to the client.
     try conn.stream.writeAll(buff[0..n]);
 }
