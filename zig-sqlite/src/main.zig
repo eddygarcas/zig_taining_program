@@ -30,12 +30,13 @@ fn openDb() !*c.sqlite3 {
     // Duplicates the given string into a null-terminated array of characters.
     const c_path: [*:0]const u8 = "./test.db"; // ✅ string literal → zero-terminated
 
-    // Opens the database file at the given path, returning a pointer to the database object.
+    // Opens the database file at the given path, returning an optional pointer to the database object.
     var db: ?*c.sqlite3 = null;
     // The return code of the sqlite3_open function, which is SQLITE_OK if the operation was successful.
     const rc = c.sqlite3_open(c_path, &db);
     if (rc != c.SQLITE_OK) return error.DbOpenFailed;
     // Returns the pointer to the database object.
+    // Unwrap the optional pointer (?*T → *T), crash if null
     return db.?;
 }
 
