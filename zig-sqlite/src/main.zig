@@ -21,6 +21,8 @@ pub fn main() !void {
     try execQuery(db, "create table if not exists test (id integer primary key, name text)");
     // Executes the query "insert into test (name) values ('test')".
     try execQuery(db, "insert into test (name) values ('test')");
+
+    try execQuery(db, "select * from test");
     // Prints a message to the standard error stream indicating that the query was executed successfully.
     std.debug.print("Query executed successfully\n", .{});
 }
